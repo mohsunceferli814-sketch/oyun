@@ -81,7 +81,7 @@ html, body {
 .shop-key { display: none; color: #fbbf24; }
 body.device-pc .shop-key { display: inline; }
 
-/* Kompüter rejimi: toxunuş düymələri gizlənir, klaviatura köməyi görünür */
+/* Kompütuthgrg8er rejimi: toxunuş düymələri gizlənir, klaviatura köməyi görünür */
 #pc-hint {
   display: none; position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
   z-index: 10; max-width: 92%; padding: 6px 12px; border-radius: 16px; text-align: center;
