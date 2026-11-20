@@ -105,7 +105,10 @@ const CHUNK_AREA = CHUNK_CELLS * CHUNK_CELLS;
 const NEEDED_CELLS = CHUNK_AREA * CONFIG.CHUNK_DONE_RATIO; // parçanın "bitdi" sayılması üçün lazım olan xana sayı
 const KG_PER_CELL = CONFIG.KG_PER_SQUARE_UNIT * CELL * CELL;
 const MONEY_PER_CELL = KG_PER_CELL * CONFIG.SELL_PRICE_PER_KG;
-
+// Toz teksturasının ölçüsünü azaldırıq.
+// Oyun məntiqinin dəqiqliyi dəyişmir.
+const DUST_TEXTURE_SCALE = 0.5;
+const DUST_TEXTURE_SIZE = Math.max(1, Math.round(GRID * DUST_TEXTURE_SCALE));
 // ===================================================================
 // ===== OYUN VƏZİYYƏTİ (state.js) =====
 // ===================================================================
@@ -461,7 +464,12 @@ function clearBaseFootprint(dustSystem) {
       }
     }
   }
-  dustSystem.ctx.clearRect(minI, minJ, maxI - minI + 1, maxJ - minJ + 1);
+  dustSystem.ctx.clearRect(
+  Math.floor(minI * DUST_TEXTURE_SCALE),
+  Math.floor(minJ * DUST_TEXTURE_SCALE),
+  Math.ceil((maxI - minI + 1) * DUST_TEXTURE_SCALE),
+  Math.ceil((maxJ - minJ + 1) * DUST_TEXTURE_SCALE)
+);
 
   // Tam bazanın altında qalan parçalar mükafatsız "bitmiş" sayılır
   for (let chunkIndex = 0; chunkIndex < dustSystem.chunkCleaned.length; chunkIndex++) {
@@ -491,7 +499,12 @@ function completeChunk(dustSystem, chunkX, chunkY) {
   }
   dustSystem.chunkCleaned[chunkIndex] = CHUNK_AREA;
 
-  dustSystem.ctx.clearRect(startI, startJ, CHUNK_CELLS, CHUNK_CELLS);
+  dustSystem.ctx.clearRect(
+  Math.floor(startI * DUST_TEXTURE_SCALE),
+  Math.floor(startJ * DUST_TEXTURE_SCALE),
+  Math.ceil(CHUNK_CELLS * DUST_TEXTURE_SCALE),
+  Math.ceil(CHUNK_CELLS * DUST_TEXTURE_SCALE)
+);
   dustSystem.dirty = true;
   dustSystem.version += 1;
 
@@ -534,29 +547,45 @@ function mod1(value) {
 // Dünya təkrarlandığı üçün kənara yaxın olanda qarşı tərəfdə də çəkilir.
 function eraseShape(dustSystem, x, z, size, round) {
   const ctx = dustSystem.ctx;
-  const px = (((x / CELL) % GRID) + GRID) % GRID;
-  const py = (((z / CELL) % GRID) + GRID) % GRID;
-  const r = size / 2 / CELL;
+  const textureScale = DUST_TEXTURE_SCALE;
+  const textureGrid = DUST_TEXTURE_SIZE;
 
+  const px = ((((x / CELL) % GRID) + GRID) % GRID) * textureScale;
+  const py = ((((z / CELL) % GRID) + GRID) % GRID) * textureScale;
+  const r = (size / 2 / CELL) * textureScale;
+
+  // Bütün silmə formalarını bir path daxilində birləşdiririk.
   ctx.save();
   ctx.globalCompositeOperation = 'destination-out';
   ctx.fillStyle = '#000';
+  ctx.beginPath();
+
   for (let oy = -1; oy <= 1; oy++) {
-    const cy = py + oy * GRID;
-    if (cy < -r || cy > GRID + r) { continue; }
+    const cy = py + oy * textureGrid;
+
+    if (cy < -r || cy > textureGrid + r) {
+      continue;
+    }
+
     for (let ox = -1; ox <= 1; ox++) {
-      const cx = px + ox * GRID;
-      if (cx < -r || cx > GRID + r) { continue; }
-      ctx.beginPath();
+      const cx = px + ox * textureGrid;
+
+      if (cx < -r || cx > textureGrid + r) {
+        continue;
+      }
+
       if (round) {
+        ctx.moveTo(cx + r, cy);
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
       } else {
         ctx.rect(cx - r, cy - r, r * 2, r * 2);
       }
-      ctx.fill();
     }
   }
+
+  ctx.fill();
   ctx.restore();
+
   dustSystem.dirty = true;
 }
 
@@ -690,8 +719,8 @@ function createDustSystem(scene) {
   // Canvas yaradılır
   const canvas = document.createElement('canvas');
 
-  canvas.width = GRID;
-  canvas.height = GRID;
+canvas.width = DUST_TEXTURE_SIZE;
+canvas.height = DUST_TEXTURE_SIZE;
 
   const ctx = canvas.getContext('2d', {
     alpha: true
@@ -700,23 +729,24 @@ function createDustSystem(scene) {
   // Başlanğıc toz
   ctx.fillStyle = '#ffffff';
 
-  ctx.fillRect(0, 0, GRID, GRID);
+  ctx.fillRect(0, 0, DUST_TEXTURE_SIZE, DUST_TEXTURE_SIZE);
 
   // Parça sərhədləri
   ctx.fillStyle = '#d4d4d4';
 
-  for (let k = 0; k < CHUNKS; k++) {
+for (let k = 0; k < CHUNKS; k++) {
 
-    const edge = k * CHUNK_CELLS;
+  const edge = Math.round(k * CHUNK_CELLS * DUST_TEXTURE_SCALE);
+  const lineWidth = Math.max(1, Math.round(2 * DUST_TEXTURE_SCALE));
 
-    ctx.fillRect(edge - 1, 0, 2, GRID);
+  ctx.fillRect(edge - lineWidth / 2, 0, lineWidth, DUST_TEXTURE_SIZE);
 
-    ctx.fillRect(0, edge - 1, GRID, 2);
-  }
+  ctx.fillRect(0, edge - lineWidth / 2, DUST_TEXTURE_SIZE, lineWidth);
+}
 
-  ctx.fillRect(GRID - 1, 0, 1, GRID);
+ctx.fillRect(DUST_TEXTURE_SIZE - 1, 0, 1, DUST_TEXTURE_SIZE);
 
-  ctx.fillRect(0, GRID - 1, GRID, 1);
+ctx.fillRect(0, DUST_TEXTURE_SIZE - 1, DUST_TEXTURE_SIZE, 1);
 
   // Əsas tekstura
   const texTop = new THREE.CanvasTexture(canvas);
@@ -835,7 +865,7 @@ function createDustSystem(scene) {
 
     lastUpload: 0,
 
-    uploadInterval: 100
+    uploadInterval: 200
   };
 
   // Bazanın altını təmizlə
