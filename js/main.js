@@ -4,12 +4,12 @@ import * as THREE from 'three';
 // ===== AYARLAR (config.js) =====
 // ===================================================================
 
-const CELL = 0.3;          // optimallaşdırılmış xana ölçüsü
-const SURFACE_SIZE = 270;
+const CELL = 0.25;         // xana ölçüsü (kiçildikcə təmizlik daha hamar görünür)
+const SURFACE_SIZE = 402;   // 6-ya bölünməlidir (parça ölçüsü) və CELL-ə uyğun olmalıdır
 const CHUNK_SIZE = 6;
 
 const CONFIG = {
-  VERSION: 'v0.9.7',
+  VERSION: 'v0.9.10',
 
   CELL,
   SURFACE_SIZE,
@@ -529,6 +529,37 @@ function mod1(value) {
 // ===== TOZUN TƏMİZLƏNMƏSİ (cleaning.js) =====
 // ===================================================================
 
+// Görüntüdən tozu fırçanın tam yerinə görə silir: xananın yarısını da silmək olur
+// (kənar xananın içində istənilən yerdə dayana bilir, hamar kənarla).
+// Dünya təkrarlandığı üçün kənara yaxın olanda qarşı tərəfdə də çəkilir.
+function eraseShape(dustSystem, x, z, size, round) {
+  const ctx = dustSystem.ctx;
+  const px = (((x / CELL) % GRID) + GRID) % GRID;
+  const py = (((z / CELL) % GRID) + GRID) % GRID;
+  const r = size / 2 / CELL;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = '#000';
+  for (let oy = -1; oy <= 1; oy++) {
+    const cy = py + oy * GRID;
+    if (cy < -r || cy > GRID + r) { continue; }
+    for (let ox = -1; ox <= 1; ox++) {
+      const cx = px + ox * GRID;
+      if (cx < -r || cx > GRID + r) { continue; }
+      ctx.beginPath();
+      if (round) {
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      } else {
+        ctx.rect(cx - r, cy - r, r * 2, r * 2);
+      }
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+  dustSystem.dirty = true;
+}
+
 // Bir xananı təmizlənmiş sayır və parçanı yoxlayır.
 // Xana yeni təmizlənibsə true, əvvəldən təmiz idisə false qaytarır.
 // Tozu çantaya yazmaq bu funksiyanın işi deyil (çünki robot çantadan istifadə etmir).
@@ -542,8 +573,7 @@ function cleanCell(dustSystem, worldI, worldJ) {
   dustSystem.cleanedCount += 1;
   dustSystem.version += 1;
 
-  // Görüntüdən də məhz bu xananı (tam 1 piksel) silirik: görünən toz = məntiqdəki toz
-  dustSystem.ctx.clearRect(i, j, 1, 1);
+  // Görünən tozu burada silmirik: onu hamar fırça izi (dairə / düzbucaq) silir
   dustSystem.dirty = true;
 
   addCleanedCell(dustSystem, i, j);
@@ -570,6 +600,7 @@ function cleanSquare(dustSystem, x, z, size) {
       }
     }
   }
+  eraseShape(dustSystem, x, z, size, false);
   return newCells;
 }
 
@@ -595,15 +626,18 @@ function updateDustSystem(dustSystem, hitPoint, isBrushing) {
   if (isBagFull()) { return; }
 
   // Başlanğıc nöqtə: əvvəlki kadrdakı yer (yaxındırsa), yoxsa elə indiki yer
+  // Aralıq böyükdürsə (kamera sürətlə fırlananda və ya kadr atlananda) düz xətt çəkmirik:
+  // fırça orada olmayıb, ona görə yalnız indiki yerə basırıq
   let startX = hitPoint.x;
   let startZ = hitPoint.z;
   let steps = 1;
   if (from !== null) {
     const distance = Math.hypot(hitPoint.x - from.x, hitPoint.z - from.z);
-    if (distance < 3) {
+    const maxGap = Math.min(3, Math.max(1, size * 2));
+    if (distance < maxGap) {
       startX = from.x;
       startZ = from.z;
-      steps = Math.max(1, Math.ceil(distance / (size / 3)));
+      steps = Math.max(1, Math.ceil(distance / (size / 5)));
     }
   }
 
@@ -844,18 +878,11 @@ function updateDustWindow(dustSystem, playerPos, nowMs) {
     playerPos.z
   );
 
-  // GPU yenilənməsi
-  if (
-    dustSystem.dirty &&
-    nowMs - dustSystem.lastUpload >=
-    dustSystem.uploadInterval
-  ) {
-
-    dustSystem.texTop.needsUpdate = true;
+  // GPU yenilənməsi: hər iki tekstura eyni anda yenilənir ki, silinən yer dərhal və fırçanın ölçüsündə görünsün
+  if (dustSystem.dirty && nowMs - dustSystem.lastUpload >= dustSystem.uploadInterval) {
     dustSystem.texWin.needsUpdate = true;
-
+    dustSystem.texTop.needsUpdate = true;
     dustSystem.dirty = false;
-
     dustSystem.lastUpload = nowMs;
   }
 }
@@ -873,10 +900,10 @@ function createWorld() {
   const sky = new THREE.Group();
   scene.add(sky);
 
-  const starCount = 2000;
+  const starCount = 200;
   const positions = new Float32Array(starCount * 3);
   for (let i = 0; i < starCount; i++) {
-    const r = 1500;
+    const r = 80;
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(2 * Math.random() - 1);
     positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
@@ -888,10 +915,10 @@ function createWorld() {
   sky.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false })));
 
   const earth = new THREE.Mesh(
-    new THREE.SphereGeometry(50, 16, 12),
+    new THREE.SphereGeometry(25, 8, 6),
     new THREE.MeshStandardMaterial({ color: 0x3388ff, emissive: 0x114488, flatShading: true })
   );
-  earth.position.set(600, 450, -1000);
+  earth.position.set(45, 33, -75);
   sky.add(earth);
 
   // Ay səthi (təmiz yer): oyunçunu izləyir, ona görə dünya sonsuzdur
@@ -1675,16 +1702,19 @@ function createMinimap() {
   canvas.width = MAP_SIZE;
   canvas.height = MAP_SIZE;
 
+  // Bufer parça həllində olur (hər parça 1 piksel): hər xanaya baxmaq lazım deyil
   const buffer = document.createElement('canvas');
-  buffer.width = MAP_SIZE;
-  buffer.height = MAP_SIZE;
+  buffer.width = CHUNKS;
+  buffer.height = CHUNKS;
   const bufferCtx = buffer.getContext('2d');
+  const mapCtx = canvas.getContext('2d');
+  mapCtx.imageSmoothingEnabled = false;
 
   return {
-    ctx: canvas.getContext('2d'),
+    ctx: mapCtx,
     buffer,
     bufferCtx,
-    image: bufferCtx.createImageData(MAP_SIZE, MAP_SIZE),
+    image: bufferCtx.createImageData(CHUNKS, CHUNKS),
     label: document.getElementById('cleaned-percent'),
     drawnVersion: -1,
     lastRedraw: 0,
@@ -1695,32 +1725,20 @@ function createMinimap() {
 function updateMinimap(map, dust, playerPos, heading, nowMs) {
   const grid = CONFIG.GRID;
 
-  // Təmizlənmiş yerlər dəyişəndə (və ən çox 4 dəfə saniyədə) xəritəni yenidən çəkirik
-  if (dust.version !== map.drawnVersion && nowMs - map.lastRedraw > 250) {
+  // Təmizlənmiş yerlər dəyişəndə (və ən çox 2 dəfə saniyədə) xəritəni yenidən çəkirik
+  if (dust.version !== map.drawnVersion && nowMs - map.lastRedraw > 500) {
     map.drawnVersion = dust.version;
     map.lastRedraw = nowMs;
 
-    for (let y = 0; y < MAP_SIZE; y++) {
-      const rowFrom = Math.floor((y * grid) / MAP_SIZE);
-      const rowTo = Math.floor(((y + 1) * grid) / MAP_SIZE);
-      for (let x = 0; x < MAP_SIZE; x++) {
-        const colFrom = Math.floor((x * grid) / MAP_SIZE);
-        const colTo = Math.floor(((x + 1) * grid) / MAP_SIZE);
-        let cleanedCells = 0;
-        for (let row = rowFrom; row < rowTo; row++) {
-          const rowStart = row * grid;
-          for (let col = colFrom; col < colTo; col++) {
-            cleanedCells += dust.cleaned[rowStart + col];
-          }
-        }
-        const share = cleanedCells / ((rowTo - rowFrom) * (colTo - colFrom));
-        const shade = 70 + share * 170;
-        const p = (y * MAP_SIZE + x) * 4;
-        map.image.data[p] = shade;
-        map.image.data[p + 1] = shade;
-        map.image.data[p + 2] = shade;
-        map.image.data[p + 3] = 255;
-      }
+    const data = map.image.data;
+    for (let k = 0; k < dust.chunkCleaned.length; k++) {
+      const share = Math.min(1, dust.chunkCleaned[k] / CHUNK_AREA);
+      const shade = 70 + share * 170;
+      const p = k * 4;
+      data[p] = shade;
+      data[p + 1] = shade;
+      data[p + 2] = shade;
+      data[p + 3] = 255;
     }
     map.bufferCtx.putImageData(map.image, 0, 0);
 
@@ -1728,7 +1746,7 @@ function updateMinimap(map, dust, playerPos, heading, nowMs) {
     map.label.textContent = 'Təmizlənib: ' + percent.toFixed(1) + '%';
   }
 
-  map.ctx.drawImage(map.buffer, 0, 0);
+  map.ctx.drawImage(map.buffer, 0, 0, MAP_SIZE, MAP_SIZE);
   // Bazanın yeri (mavi kvadrat)
   const baseMapX = mod1(CONFIG.BASE_X / CONFIG.SURFACE_SIZE) * MAP_SIZE;
   const baseMapY = mod1(CONFIG.BASE_Z / CONFIG.SURFACE_SIZE) * MAP_SIZE;
@@ -2056,7 +2074,7 @@ function startGame(device) {
   renderer.setSize(window.innerWidth, window.innerHeight);
   container.appendChild(renderer.domElement);
 
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 2000);
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 100);
   const world = createWorld();
   world.scene.add(camera);
 
