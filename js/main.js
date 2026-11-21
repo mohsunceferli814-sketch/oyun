@@ -2444,7 +2444,7 @@ document.getElementById('version-tag').textContent = CONFIG.VERSION;
 // Oyunu seçilmiş cihaza ('phone' və ya 'pc') görə işə salır
 function startGame(device) {
   loadGame();
-  GameState.money = GameState.money + 100000;
+  GameState.money = 100000;
   applyUpgrades();
 
   const container = document.getElementById('game-container');
