@@ -9,7 +9,7 @@ const SURFACE_SIZE = 402;   // 6-ya bölünməlidir (parça ölçüsü) və CELL
 const CHUNK_SIZE = 6;
 
 const CONFIG = {
-  VERSION: 'v0.10.1',
+  VERSION: 'v0.11.0',
 
   CELL,
   SURFACE_SIZE,
@@ -111,6 +111,17 @@ const CONFIG = {
   VEHICLE_SWEEP_SQUARE: 1.0,    // maşının zolağını təşkil edən kiçik kvadratın ölçüsü
   VEHICLE_BOARD_MARGIN: 3,      // bazadan nə qədər uzaqda maşına minmək olar
   VEHICLE_LEAVE_MARGIN: 1,      // bazaya bu qədər yaxınlaşanda maşından özü düşür
+
+  // İşçilər (əlində süpürgə olan adamlar; 1-ci səviyyə hamıda var, pulsuzdur)
+  // size: süpürgənin təmizlədiyi zolağın eni (metr), speed: sürəti (metr/saniyə)
+  WORKER_LEVELS: [
+    { name: 'İşçi', size: 0.9, speed: 2.2, price: 0, shirtColor: 0x3b82f6, pantsColor: 0x1f2937, hatColor: 0xfacc15 },
+    { name: 'Təcrübəli işçi', size: 1.3, speed: 3.0, price: 700, shirtColor: 0xf97316, pantsColor: 0x374151, hatColor: 0xffffff },
+    { name: 'Usta işçi', size: 1.8, speed: 4.0, price: 2500, shirtColor: 0x22c55e, pantsColor: 0x1e293b, hatColor: 0xef4444 },
+  ],
+
+  // İşçi sayı: siyahının uzunluğu = ən çox işçi sayı, hər ədəd növbəti işçinin qiymətidir
+  WORKER_COUNT_PRICES: [300, 800, 2000, 5000, 10000],
 };
 
 // Bütün hissələrin ortaq istifadə etdiyi ölçülər
@@ -143,6 +154,8 @@ const GameState = {
     robotLevel: 1,   // robot modeli (1 = ən sadə)
     robotCount: 0,   // neçə robot alınıb (0 = heç biri)
     vehicleLevel: 0, // süpürgə maşını (0 = hələ alınmayıb, 1 = skuter ...)
+    workerLevel: 1,  // işçi səviyyəsi (1 = ən sadə)
+    workerCount: 0,  // neçə işçi alınıb (0 = heç biri)
   },
 };
 
@@ -169,6 +182,8 @@ function exportState() {
       robotLevel: GameState.upgrades.robotLevel,
       robotCount: GameState.upgrades.robotCount,
       vehicleLevel: GameState.upgrades.vehicleLevel,
+      workerLevel: GameState.upgrades.workerLevel,
+      workerCount: GameState.upgrades.workerCount,
     },
   };
 }
@@ -194,6 +209,10 @@ function importState(data) {
 
     // Köhnə yaddaşda maşın yox idi: onda 0 sayırıq
     GameState.upgrades.vehicleLevel = toNumber(saved.vehicleLevel, 0);
+
+    // Köhnə yaddaşda işçi yox idi: səviyyə 1, say 0 sayırıq
+    GameState.upgrades.workerLevel = toNumber(saved.workerLevel, 1);
+    GameState.upgrades.workerCount = toNumber(saved.workerCount, 0);
   }
 }
 
@@ -259,6 +278,8 @@ function applyUpgrades() {
   upgrades.robotLevel = clamp(Math.round(upgrades.robotLevel), 1, CONFIG.ROBOT_LEVELS.length);
   upgrades.robotCount = clamp(Math.round(upgrades.robotCount), 0, CONFIG.ROBOT_COUNT_PRICES.length);
   upgrades.vehicleLevel = clamp(Math.round(upgrades.vehicleLevel), 0, CONFIG.VEHICLE_LEVELS.length);
+  upgrades.workerLevel = clamp(Math.round(upgrades.workerLevel), 1, CONFIG.WORKER_LEVELS.length);
+  upgrades.workerCount = clamp(Math.round(upgrades.workerCount), 0, CONFIG.WORKER_COUNT_PRICES.length);
   setBagCapacity(CONFIG.BAG_LEVELS[upgrades.bagLevel - 1].capacity);
 }
 
@@ -295,6 +316,23 @@ function getNextRobotTool() {
 // Növbəti robotun qiyməti (daha robot almaq olmursa null)
 function getNextRobotCountPrice() {
   const price = CONFIG.ROBOT_COUNT_PRICES[GameState.upgrades.robotCount];
+  if (price === undefined) { return null; }
+  return price;
+}
+
+// Hazırkı işçi səviyyəsi (bütün işçilər eyni səviyyədə işləyir)
+function getWorkerTool() {
+  return CONFIG.WORKER_LEVELS[GameState.upgrades.workerLevel - 1];
+}
+
+// Növbəti işçi səviyyəsi (yoxdursa null)
+function getNextWorkerTool() {
+  return CONFIG.WORKER_LEVELS[GameState.upgrades.workerLevel] || null;
+}
+
+// Növbəti işçinin qiyməti (daha işçi almaq olmursa null)
+function getNextWorkerCountPrice() {
+  const price = CONFIG.WORKER_COUNT_PRICES[GameState.upgrades.workerCount];
   if (price === undefined) { return null; }
   return price;
 }
@@ -348,6 +386,26 @@ function buyRobotCountUpgrade() {
   GameState.upgrades.robotCount += 1;
   applyUpgrades();
   return { ok: true, message: 'Yeni robot alındı! 🤖 (' + GameState.upgrades.robotCount + ')' };
+}
+
+// Növbəti işçi səviyyəsini alır (bütün işçilər yeni səviyyəyə keçir)
+function buyWorkerLevelUpgrade() {
+  const next = getNextWorkerTool();
+  if (next === null) { return { ok: false, message: 'Ən güclü işçi səviyyəsidir' }; }
+  if (!spendMoney(next.price)) { return { ok: false, message: 'Pul çatmır' }; }
+  GameState.upgrades.workerLevel += 1;
+  applyUpgrades();
+  return { ok: true, message: next.name + ' səviyyəsi alındı! 👷' };
+}
+
+// Yeni işçi işə götürür
+function buyWorkerCountUpgrade() {
+  const price = getNextWorkerCountPrice();
+  if (price === null) { return { ok: false, message: 'Ən çox işçi sayına çatdın' }; }
+  if (!spendMoney(price)) { return { ok: false, message: 'Pul çatmır' }; }
+  GameState.upgrades.workerCount += 1;
+  applyUpgrades();
+  return { ok: true, message: 'Yeni işçi işə götürüldü! 👷 (' + GameState.upgrades.workerCount + ')' };
 }
 
 // Növbəti süpürgə maşınını alır (ilk dəfə alanda maşın sənin olur, sonra növü dəyişir)
@@ -1168,6 +1226,8 @@ const ITEMS = [
   { id: 'robotModel', key: '3', title: '🤖 Robot modeli', buy: buyRobotModelUpgrade },
   { id: 'robotCount', key: '4', title: '🤖 Robot sayı', buy: buyRobotCountUpgrade },
   { id: 'vehicle', key: '5', title: '🚜 Süpürgə maşını', buy: buyVehicleUpgrade },
+  { id: 'workerLevel', key: '6', title: '👷 İşçi səviyyəsi', buy: buyWorkerLevelUpgrade },
+  { id: 'workerCount', key: '7', title: '👷 İşçi sayı', buy: buyWorkerCountUpgrade },
 ];
 
 // Mağaza panelini hazırlayır: hər yenilənmə üçün bir sətir və "Al" düyməsi düzəldir
@@ -1178,6 +1238,9 @@ function createShopPanel() {
     list: document.getElementById('shop-items'),
     rows: [],
   };
+
+  shop.panel.style.maxHeight = '75vh';
+  shop.panel.style.overflowY = 'auto';
 
   for (const item of ITEMS) {
     const row = document.createElement('div');
@@ -1253,6 +1316,27 @@ function describeRow(id) {
     } else {
       info = current.name + ' → ' + next.name + ' (' + next.size + ' m)';
       price = next.price;
+    }
+  } else if (id === 'workerLevel') {
+    const current = getWorkerTool();
+    const next = getNextWorkerTool();
+    if (next === null) {
+      info = current.name + ' (' + current.size + ' m): ən güclü səviyyə';
+    } else {
+      info = current.name + ' → ' + next.name + ' (' + next.size + ' m)';
+      price = next.price;
+    }
+  } else if (id === 'workerCount') {
+    const count = GameState.upgrades.workerCount;
+    const nextPrice = getNextWorkerCountPrice();
+    if (nextPrice === null) {
+      info = 'İşçi sayı: ' + count + ' (maksimum)';
+    } else if (count === 0) {
+      info = 'İşçi sayı: 0 → 1 (əlində süpürgə ilə özü süpürür)';
+      price = nextPrice;
+    } else {
+      info = 'İşçi sayı: ' + count + ' → ' + (count + 1);
+      price = nextPrice;
     }
   } else if (id === 'vehicle') {
     const current = getVehicleTool();
@@ -1581,7 +1665,7 @@ function buildRobotModel() {
 
 // Robotlar sistemini yaradır (robotlar alınanda özləri əlavə olunur)
 function createRobots(scene) {
-  return { scene: scene, robots: [] };
+  return { scene: scene, robots: [], otherUnits: [] };   // otherUnits: işçilər (parça seçimi üçün)
 }
 
 // Ədədi 0..SIZE aralığına gətirir (dünya təkrarlandığı üçün)
@@ -1614,6 +1698,13 @@ function isClaimed(system, robot, chunkIndex) {
   for (const other of system.robots) {
     if (other !== robot && other.chunkIndex === chunkIndex) {
       return true;
+    }
+  }
+  if (system.otherUnits !== undefined) {
+    for (const other of system.otherUnits) {
+      if (other !== robot && other.chunkIndex === chunkIndex) {
+        return true;
+      }
     }
   }
   return false;
@@ -2334,6 +2425,182 @@ function updateVehicle(vehicle, dustSystem, playerPos, heading, dt, time) {
 }
 
 // ===================================================================
+// ===== İŞÇİLƏR (worker.js) =====
+// ===================================================================
+// İşçilər əlində süpürgə tutan adamlardır. Robotlar kimi parça-parça gəzib süpürürlər.
+// Yeriyəndə ayaqları yellənir, süpürəndə bədənləri sağa-sola burulur.
+
+// İşçinin görünüşünü düzəldir: ayaqlar, gövdə, baş, dəbilqə, qollar və əlində süpürgə
+function buildWorkerModel(tool) {
+  const model = new THREE.Group();
+  model.userData.legs = [];
+  model.userData.upper = null;
+
+  // Ayaqlar (kalçadan yellənir)
+  for (const side of [-1, 1]) {
+    const leg = new THREE.Group();
+    leg.position.set(side * 0.12, 0.8, 0);
+    leg.add(makeBlock(0.16, 0.8, 0.18, tool.pantsColor, 0, -0.4, 0));
+    leg.add(makeBlock(0.18, 0.08, 0.28, 0x111827, 0, -0.78, 0.05));
+    model.add(leg);
+    model.userData.legs.push(leg);
+  }
+
+  // Yuxarı hissə: gövdə, baş, qollar və süpürgə birlikdə burulur
+  const upper = new THREE.Group();
+  model.add(upper);
+  model.userData.upper = upper;
+
+  // Gövdə və parlaq zolaq
+  upper.add(makeBlock(0.45, 0.55, 0.25, tool.shirtColor, 0, 1.08, 0));
+  upper.add(makeBlock(0.47, 0.07, 0.27, 0xfacc15, 0, 1.0, 0, 0x854d0e));
+
+  // Baş, gözlər və dəbilqə
+  upper.add(makePart(new THREE.SphereGeometry(0.17, 12, 10), 0xf1c27d, 0, 1.55, 0));
+  upper.add(makeBlock(0.04, 0.04, 0.03, 0x111827, 0.06, 1.57, 0.16));
+  upper.add(makeBlock(0.04, 0.04, 0.03, 0x111827, -0.06, 1.57, 0.16));
+  upper.add(makePart(new THREE.CylinderGeometry(0.19, 0.2, 0.12, 12), tool.hatColor, 0, 1.7, 0));
+  upper.add(makeBlock(0.34, 0.03, 0.12, tool.hatColor, 0, 1.65, 0.16));
+
+  // Qollar: irəli uzanıb süpürgənin sapını tutur
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.position.set(side * 0.28, 1.3, 0);
+    arm.rotation.x = -0.95;
+    arm.rotation.z = -side * 0.43;
+    arm.add(makeBlock(0.11, 0.55, 0.11, tool.shirtColor, 0, -0.27, 0));
+    arm.add(makeBlock(0.1, 0.1, 0.1, 0xf1c27d, 0, -0.57, 0));
+    upper.add(arm);
+  }
+
+  // Süpürgə: sap və tük hissəsi (eni işçinin təmizləmə eninə bərabərdir)
+  const handle = makeBlock(0.04, 1.1, 0.04, 0x9c6b3a, 0, 0.525, 0.725);
+  handle.rotation.x = -0.44;
+  upper.add(handle);
+  upper.add(makeBlock(tool.size, 0.1, 0.16, 0xe0b84a, 0, 0.06, 0.95));
+  upper.add(makeBlock(tool.size, 0.05, 0.12, 0x92400e, 0, 0.14, 0.95));
+
+  return model;
+}
+
+// İşçilər sistemini yaradır (işçilər alınanda özləri əlavə olunur)
+function createWorkers(scene) {
+  return { scene: scene, workers: [] };
+}
+
+// Yeni işçi düzəldir və bazanın qapısının qarşısına qoyur
+function createOneWorker(system, number) {
+  const group = new THREE.Group();
+  system.scene.add(group);
+
+  return {
+    group: group,
+    model: null,
+    modelLevel: 0,         // hazırda göstərilən görünüşün səviyyəsi
+    x: CONFIG.BASE_X + (number - 2) * 1.3 + 0.65,
+    z: CONFIG.BASE_Z + CONFIG.BASE_DEPTH / 2 + 5,
+    chunkIndex: -1,        // hazırda təmizlədiyi parça (-1 = yoxdur)
+    lastChunkIndex: -1,    // ən son bitirdiyi parça
+    waypoints: [],         // parçanın içindəki yol nöqtələri
+    waypointIndex: 0,
+    waitTime: 0,
+    pendingMoney: 0,       // hələ hesaba yazılmayan pul (1-ə çatanda yazılır)
+    phase: number * 1.7,   // yeriş və süpürmə hərəkətinin fazası
+  };
+}
+
+// İşçinin görünüşünü cari səviyyəyə uyğun dəyişir
+function syncWorkerModel(worker) {
+  const level = GameState.upgrades.workerLevel;
+  if (worker.modelLevel === level) { return; }
+
+  if (worker.model !== null) {
+    worker.group.remove(worker.model);
+    disposeModel(worker.model);
+    worker.model = null;
+  }
+
+  worker.modelLevel = level;
+  worker.model = buildWorkerModel(CONFIG.WORKER_LEVELS[level - 1]);
+  worker.group.add(worker.model);
+}
+
+// İşçinin ayaqlarını yelləyir və süpürərkən bədənini burur
+function animateWorker(worker, movedDistance, isWorking, time) {
+  const data = worker.model.userData;
+  worker.phase += movedDistance * 5;
+
+  let swing = 0;
+  if (movedDistance > 0.0001) {
+    swing = 0.7;
+  }
+  data.legs[0].rotation.x = Math.sin(worker.phase) * swing;
+  data.legs[1].rotation.x = -Math.sin(worker.phase) * swing;
+
+  if (isWorking) {
+    data.upper.rotation.y = Math.sin(time * 5 + worker.phase * 0.3) * 0.35;
+    data.upper.position.y = Math.abs(Math.sin(worker.phase)) * 0.03;
+  } else {
+    data.upper.rotation.y = 0;
+    data.upper.position.y = 0;
+  }
+}
+
+// Bir işçinin hər kadrdakı işi: parça seç, onu tam süpür, sonra başqasına keç
+function updateOneWorker(system, robots, worker, dustSystem, playerPos, dt, time) {
+  const tool = getWorkerTool();
+  syncWorkerModel(worker);
+
+  // Parça artıq bitibsə və ya yol qurtarıbsa, yenisinə keçirik
+  if (worker.chunkIndex !== -1) {
+    const chunkIsDone = dustSystem.chunkDone[worker.chunkIndex] === 1;
+    const routeIsOver = worker.waypointIndex >= worker.waypoints.length;
+    if (chunkIsDone || routeIsOver) {
+      worker.lastChunkIndex = worker.chunkIndex;
+      worker.chunkIndex = -1;
+    }
+  }
+
+  // Yeni parça seçirik (digər işçilərin və robotların seçdiyi parçaları keçirik)
+  if (worker.chunkIndex === -1) {
+    if (worker.waitTime > 0) {
+      worker.waitTime -= dt;
+    } else {
+      const claimSystem = { robots: system.workers.concat(robots.robots) };
+      const found = pickChunk(claimSystem, worker, dustSystem);
+      if (found === -1) {
+        worker.waitTime = 2;
+      } else {
+        worker.chunkIndex = found;
+        worker.waypoints = buildWaypoints(found, tool.size);
+        worker.waypointIndex = 0;
+      }
+    }
+  }
+
+  const beforeX = worker.x;
+  const beforeZ = worker.z;
+  if (worker.chunkIndex !== -1) {
+    driveRobot(worker, dustSystem, tool, dt);
+  }
+  const moved = Math.hypot(wrapDelta(worker.x - beforeX), wrapDelta(worker.z - beforeZ));
+
+  placeRobot(worker, playerPos);
+  animateWorker(worker, moved, worker.chunkIndex !== -1, time);
+}
+
+// Hər kadrda: alınmış işçilərin sayı qədər işçi yaradılır və hamısı işləyir
+function updateWorkers(system, robots, dustSystem, playerPos, dt, time) {
+  while (system.workers.length < GameState.upgrades.workerCount) {
+    system.workers.push(createOneWorker(system, system.workers.length));
+  }
+
+  for (const worker of system.workers) {
+    updateOneWorker(system, robots, worker, dustSystem, playerPos, dt, time);
+  }
+}
+
+// ===================================================================
 // ===== XƏRİTƏ (minimap.js) =====
 // ===================================================================
 
@@ -2552,9 +2819,13 @@ const BUY_BUTTONS = {
   Numpad4: 'shop-buy-robotCount',
   Digit5: 'shop-buy-vehicle',
   Numpad5: 'shop-buy-vehicle',
+  Digit6: 'shop-buy-workerLevel',
+  Numpad6: 'shop-buy-workerLevel',
+  Digit7: 'shop-buy-workerCount',
+  Numpad7: 'shop-buy-workerCount',
 };
 
-// Kompüter idarəsi: WASD/oxlar, siçan baxışı, sol klik və ya Boşluq, 1/2/3/4 (yeniləmə paneli)
+// Kompüter idarəsi: WASD/oxlar, siçan baxışı, sol klik və ya Boşluq, E (maşın), 1-7 (yeniləmə paneli)
 function setupKeyboardControls(inputState) {
   const container = document.getElementById('game-container');
   const hint = document.getElementById('pc-hint');
@@ -2588,7 +2859,7 @@ function setupKeyboardControls(inputState) {
   // Ekranın altındakı köməkçi yazı
   function updateHint() {
     if (isLocked()) {
-      hint.textContent = 'WASD: yeriş · Siçan: baxış · Sol klik / Boşluq: təmizlə · E: maşına min / düş · 1-5: yenilə · Esc: siçanı burax';
+      hint.textContent = 'WASD: yeriş · Siçan: baxış · Sol klik / Boşluq: təmizlə · E: maşına min / düş · 1-7: yenilə · Esc: siçanı burax';
     } else {
       hint.textContent = 'Başlamaq üçün oyuna klikləyin';
     }
@@ -2739,6 +3010,8 @@ function startGame(device) {
   const base = createBase(world.scene);
   const robots = createRobots(world.scene);
   const vehicle = createVehicle(world.scene);
+  const workers = createWorkers(world.scene);
+  robots.otherUnits = workers.workers;
 
   setupControls(device);
   if (device === 'phone') {
@@ -2895,6 +3168,7 @@ function startGame(device) {
     updateDustSystem(dustSystem, hit, inputState.actionPressed && !vehicle.driving);
     updateVehicle(vehicle, dustSystem, playerPos, heading, dt, clock.elapsedTime);
     updateRobots(robots, dustSystem, playerPos, dt);
+    updateWorkers(workers, robots, dustSystem, playerPos, dt, clock.elapsedTime);
     updateBase(base, playerPos);
     updateMinimap(minimap, dustSystem, playerPos, heading, nowMs);
 
