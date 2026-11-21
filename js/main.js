@@ -9,7 +9,7 @@ const SURFACE_SIZE = 402;   // 6-ya bölünməlidir (parça ölçüsü) və CELL
 const CHUNK_SIZE = 6;
 
 const CONFIG = {
-  VERSION: 'v0.10.0',
+  VERSION: 'v0.10.1',
 
   CELL,
   SURFACE_SIZE,
@@ -510,11 +510,11 @@ function clearBaseFootprint(dustSystem) {
     }
   }
   dustSystem.ctx.clearRect(
-    Math.floor(minI * DUST_TEXTURE_SCALE),
-    Math.floor(minJ * DUST_TEXTURE_SCALE),
-    Math.ceil((maxI - minI + 1) * DUST_TEXTURE_SCALE),
-    Math.ceil((maxJ - minJ + 1) * DUST_TEXTURE_SCALE)
-  );
+  Math.floor(minI * DUST_TEXTURE_SCALE),
+  Math.floor(minJ * DUST_TEXTURE_SCALE),
+  Math.ceil((maxI - minI + 1) * DUST_TEXTURE_SCALE),
+  Math.ceil((maxJ - minJ + 1) * DUST_TEXTURE_SCALE)
+);
 
   // Tam bazanın altında qalan parçalar mükafatsız "bitmiş" sayılır
   for (let chunkIndex = 0; chunkIndex < dustSystem.chunkCleaned.length; chunkIndex++) {
@@ -545,11 +545,11 @@ function completeChunk(dustSystem, chunkX, chunkY) {
   dustSystem.chunkCleaned[chunkIndex] = CHUNK_AREA;
 
   dustSystem.ctx.clearRect(
-    Math.floor(startI * DUST_TEXTURE_SCALE),
-    Math.floor(startJ * DUST_TEXTURE_SCALE),
-    Math.ceil(CHUNK_CELLS * DUST_TEXTURE_SCALE),
-    Math.ceil(CHUNK_CELLS * DUST_TEXTURE_SCALE)
-  );
+  Math.floor(startI * DUST_TEXTURE_SCALE),
+  Math.floor(startJ * DUST_TEXTURE_SCALE),
+  Math.ceil(CHUNK_CELLS * DUST_TEXTURE_SCALE),
+  Math.ceil(CHUNK_CELLS * DUST_TEXTURE_SCALE)
+);
   dustSystem.dirty = true;
   dustSystem.version += 1;
 
@@ -655,7 +655,7 @@ function cleanCell(dustSystem, worldI, worldJ) {
 }
 
 // (x, z) nöqtəsi ətrafında size ölçülü kvadratı təmizləyir.
-// Neçə yeni xana təmizləndiyini qaytarır (oyunçu, robot və maşın bunu istifadə edir).
+// Neçə yeni xana təmizləndiyini qaytarır (oyunçu və robot bunu istifadə edir).
 function cleanSquare(dustSystem, x, z, size) {
   const half = size / 2;
   const minI = Math.floor((x - half) / CELL);
@@ -764,8 +764,8 @@ function createDustSystem(scene) {
   // Canvas yaradılır
   const canvas = document.createElement('canvas');
 
-  canvas.width = DUST_TEXTURE_SIZE;
-  canvas.height = DUST_TEXTURE_SIZE;
+canvas.width = DUST_TEXTURE_SIZE;
+canvas.height = DUST_TEXTURE_SIZE;
 
   const ctx = canvas.getContext('2d', {
     alpha: true
@@ -779,19 +779,19 @@ function createDustSystem(scene) {
   // Parça sərhədləri
   ctx.fillStyle = '#d4d4d4';
 
-  for (let k = 0; k < CHUNKS; k++) {
+for (let k = 0; k < CHUNKS; k++) {
 
-    const edge = Math.round(k * CHUNK_CELLS * DUST_TEXTURE_SCALE);
-    const lineWidth = Math.max(1, Math.round(2 * DUST_TEXTURE_SCALE));
+  const edge = Math.round(k * CHUNK_CELLS * DUST_TEXTURE_SCALE);
+  const lineWidth = Math.max(1, Math.round(2 * DUST_TEXTURE_SCALE));
 
-    ctx.fillRect(edge - lineWidth / 2, 0, lineWidth, DUST_TEXTURE_SIZE);
+  ctx.fillRect(edge - lineWidth / 2, 0, lineWidth, DUST_TEXTURE_SIZE);
 
-    ctx.fillRect(0, edge - lineWidth / 2, DUST_TEXTURE_SIZE, lineWidth);
-  }
+  ctx.fillRect(0, edge - lineWidth / 2, DUST_TEXTURE_SIZE, lineWidth);
+}
 
-  ctx.fillRect(DUST_TEXTURE_SIZE - 1, 0, 1, DUST_TEXTURE_SIZE);
+ctx.fillRect(DUST_TEXTURE_SIZE - 1, 0, 1, DUST_TEXTURE_SIZE);
 
-  ctx.fillRect(0, DUST_TEXTURE_SIZE - 1, DUST_TEXTURE_SIZE, 1);
+ctx.fillRect(0, DUST_TEXTURE_SIZE - 1, DUST_TEXTURE_SIZE, 1);
 
   // Əsas tekstura
   const texTop = new THREE.CanvasTexture(canvas);
@@ -1161,7 +1161,7 @@ function updateBrush(brushGroup, isCleaning, dt, time) {
 // ===== YENİLƏMƏ PANELİ (shop.js) =====
 // ===================================================================
 
-// Paneldəki sətirlər: alət, çanta, robot modeli, robot sayı, süpürgə maşını (key = kompüterdə basılan düymə)
+// Paneldəki sətirlər: alət, çanta, robot modeli, robot sayı (key = kompüterdə basılan düymə)
 const ITEMS = [
   { id: 'tool', key: '1', title: '🪥 Alət', buy: buyBrushUpgrade },
   { id: 'bag', key: '2', title: '🎒 Çanta', buy: buyBagUpgrade },
@@ -1788,105 +1788,359 @@ function updateRobots(system, dustSystem, playerPos, dt) {
 // ===== SÜPÜRGƏ MAŞINLARI (vehicle.js) =====
 // ===================================================================
 // Maşının önü +z istiqamətindədir (robot kimi). Hər səviyyənin öz görünüşü var.
+// Təkərlər sürəndə fırlanır, fırça valları həmişə fırlanır, işıqlı lampalar yanıb-sönür.
 
-// Təkər düzəldir (yan tərəfə yatırılmış silindr)
-function makeWheel(radius, thickness, color, x, y, z) {
-  const material = new THREE.MeshStandardMaterial({ color: color, flatShading: true });
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, thickness, 14), material);
-  mesh.rotation.z = Math.PI / 2;
+// Maşın modeli üçün boş qrup düzəldir (hərəkətli hissələrin siyahıları ilə birlikdə)
+function newVehicleModel() {
+  const model = new THREE.Group();
+  model.userData.wheels = [];   // fırlanan təkərlər
+  model.userData.drums = [];    // fırlanan fırça vallar
+  model.userData.beacons = [];  // yanıb-sönən lampalar
+  return model;
+}
+
+// İstənilən formada hissə düzəldir (forma, rəng, yer, istəyə görə parıltı rəngi)
+function makePart(geometry, color, x, y, z, glowColor) {
+  const material = new THREE.MeshStandardMaterial({
+    color: color,
+    flatShading: true,
+    roughness: 0.6,
+    metalness: 0.2,
+  });
+  if (glowColor !== undefined) {
+    material.emissive = new THREE.Color(glowColor);
+  }
+  const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(x, y, z);
   return mesh;
 }
 
-// Maşının qabağındakı enli süpürgə zolağını düzəldir (eni maşının təmizləmə eninə bərabərdir)
-function buildBrushBar(model, width, z, bristleColor) {
-  model.add(makeBox(width, 0.15, 0.3, 0x374151, 0, 0.17, z));
-  model.add(makeBox(width, 0.1, 0.26, bristleColor, 0, 0.06, z));
+// Qutu şəklində hissə (en, hündürlük, dərinlik, rəng, yer, parıltı)
+function makeBlock(width, height, depth, color, x, y, z, glowColor) {
+  return makePart(new THREE.BoxGeometry(width, height, depth), color, x, y, z, glowColor);
 }
 
-// 1. Skuter: kiçik narıncı gövdə, kiçik təkərlər
-function buildVehicleScooter(width) {
-  const model = new THREE.Group();
-  model.add(makeBox(0.9, 0.35, 1.5, 0xf59e0b, 0, 0.45, 0));
-  model.add(makeBox(0.5, 0.1, 0.5, 0x1f2937, 0, 0.72, -0.2));
-  model.add(makeBox(0.7, 0.05, 0.05, 0x111111, 0, 0.9, 0.4));
-  model.add(makeBox(0.05, 0.3, 0.05, 0x111111, 0, 0.75, 0.4));
-  model.add(makeWheel(0.22, 0.15, 0x111111, -0.5, 0.22, 0.55));
-  model.add(makeWheel(0.22, 0.15, 0x111111, 0.5, 0.22, 0.55));
-  model.add(makeWheel(0.22, 0.15, 0x111111, -0.5, 0.22, -0.55));
-  model.add(makeWheel(0.22, 0.15, 0x111111, 0.5, 0.22, -0.55));
-  buildBrushBar(model, width, 1.1, 0xffd34d);
-  return model;
+// Şüşə hissə (yarı şəffaf); tilt: öndən yana əyilmə bucağı
+function makeGlass(width, height, depth, x, y, z, tilt) {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x7dd3fc,
+    transparent: true,
+    opacity: 0.55,
+    roughness: 0.15,
+    metalness: 0.3,
+    emissive: 0x0c4a6e,
+  });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+  mesh.position.set(x, y, z);
+  mesh.rotation.x = tilt;
+  return mesh;
 }
 
-// 2. Süpürgə yük maşını: mavi gövdə, tünd kabina, yük yeri
-function buildVehicleTruck(width) {
-  const model = new THREE.Group();
-  model.add(makeBox(1.4, 0.5, 2.4, 0x3b82f6, 0, 0.6, 0));
-  model.add(makeBox(1.3, 0.6, 0.9, 0x1e3a8a, 0, 1.15, 0.5));
-  model.add(makeBox(1.3, 0.3, 1.0, 0x64748b, 0, 0.95, -0.8));
-  model.add(makeBox(0.3, 0.08, 0.1, 0xfef08a, 0, 0.7, 1.22, 0xfef08a));
-  model.add(makeWheel(0.38, 0.25, 0x111111, -0.78, 0.38, 0.8));
-  model.add(makeWheel(0.38, 0.25, 0x111111, 0.78, 0.38, 0.8));
-  model.add(makeWheel(0.38, 0.25, 0x111111, -0.78, 0.38, -0.8));
-  model.add(makeWheel(0.38, 0.25, 0x111111, 0.78, 0.38, -0.8));
-  buildBrushBar(model, width, 1.8, 0xfacc15);
-  return model;
+// Yarım kürə şəklində şüşə günbəz (kabina üçün)
+function makeDome(scaleX, scaleY, scaleZ, color, glowColor, x, y, z) {
+  const material = new THREE.MeshStandardMaterial({
+    color: color,
+    transparent: true,
+    opacity: 0.6,
+    roughness: 0.1,
+    metalness: 0.3,
+    emissive: glowColor,
+  });
+  const geometry = new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.scale.set(scaleX, scaleY, scaleZ);
+  mesh.position.set(x, y, z);
+  return mesh;
 }
 
-// 3. Süpürgə traktoru: yaşıl gövdə, iri arxa təkərlər, damlı kabina, tüstü borusu
-function buildVehicleTractor(width) {
-  const model = new THREE.Group();
-  model.add(makeBox(1.3, 0.7, 2.4, 0x16a34a, 0, 0.9, 0.2));
-  model.add(makeBox(1.2, 0.9, 1.0, 0x14532d, 0, 1.65, -0.3));
-  model.add(makeBox(1.4, 0.1, 1.2, 0x052e16, 0, 2.15, -0.3));
-  const pipe = makeCylinder(0.07, 0.7, 0x222222, 1.6);
-  pipe.position.set(0.4, 1.6, 0.9);
-  model.add(pipe);
-  model.add(makeWheel(0.75, 0.4, 0x111111, -0.95, 0.75, -0.7));
-  model.add(makeWheel(0.75, 0.4, 0x111111, 0.95, 0.75, -0.7));
-  model.add(makeWheel(0.45, 0.3, 0x111111, -0.85, 0.45, 1.1));
-  model.add(makeWheel(0.45, 0.3, 0x111111, 0.85, 0.45, 1.1));
-  model.add(makeBox(0.15, 0.15, 1.0, 0x374151, -0.5, 0.4, 1.7));
-  model.add(makeBox(0.15, 0.15, 1.0, 0x374151, 0.5, 0.4, 1.7));
-  buildBrushBar(model, width, 2.2, 0xdc2626);
-  return model;
+// Təkər əlavə edir: qara şin, rəngli göbək və göbəkdə çubuq (fırlananda görünsün)
+function addWheel(model, radius, thickness, hubColor, x, y, z) {
+  const group = new THREE.Group();
+  group.position.set(x, y, z);
+
+  const tire = makePart(new THREE.CylinderGeometry(radius, radius, thickness, 16), 0x111827, 0, 0, 0);
+  tire.rotation.z = Math.PI / 2;
+  group.add(tire);
+
+  const hub = makePart(new THREE.CylinderGeometry(radius * 0.55, radius * 0.55, thickness + 0.04, 12), hubColor, 0, 0, 0);
+  hub.rotation.z = Math.PI / 2;
+  group.add(hub);
+
+  group.add(makeBlock(thickness + 0.07, radius * 0.9, radius * 0.18, 0x374151, 0, 0, 0));
+
+  model.add(group);
+  model.userData.wheels.push({ group: group, radius: radius });
 }
 
-// 4. Ay vezdehodu: ağ gövdə, 6 iri təkər, şüşə kabina, günəş paneli, antena
-function buildVehicleRover(width) {
-  const model = new THREE.Group();
-  model.add(makeBox(1.8, 0.6, 3.0, 0xe5e7eb, 0, 0.8, 0));
-  model.add(makeBox(1.4, 0.6, 1.2, 0x22d3ee, 0, 1.35, 0.6, 0x0e7490));
-  model.add(makeBox(1.8, 0.05, 1.0, 0x1e3a8a, 0, 1.2, -0.9));
-  const antenna = makeCylinder(0.03, 1.0, 0x94a3b8, 1.8);
-  antenna.position.set(-0.6, 1.8, -1.3);
-  model.add(antenna);
-  const zList = [-1.0, 0, 1.0];
-  for (const wheelZ of zList) {
-    model.add(makeWheel(0.5, 0.4, 0x1f2937, -1.05, 0.5, wheelZ));
-    model.add(makeWheel(0.5, 0.4, 0x1f2937, 1.05, 0.5, wheelZ));
+// Fırça val əlavə edir: tüklü silindr, kənar lövhələr və üstündə qoruyucu örtük
+function addDrum(model, width, radius, z, bristleColor) {
+  const drum = new THREE.Group();
+  drum.position.set(0, radius + 0.03, z);
+
+  const core = makePart(new THREE.CylinderGeometry(radius * 0.55, radius * 0.55, width, 10), 0x4b5563, 0, 0, 0);
+  core.rotation.z = Math.PI / 2;
+  drum.add(core);
+
+  // Tük zolaqları valın ətrafında düzülür
+  const stripCount = 8;
+  for (let k = 0; k < stripCount; k++) {
+    const angle = (k * Math.PI * 2) / stripCount;
+    const strip = makeBlock(width * 0.98, radius * 0.55, 0.07, bristleColor, 0, Math.sin(angle) * radius * 0.78, Math.cos(angle) * radius * 0.78);
+    strip.rotation.x = Math.PI / 2 - angle;
+    drum.add(strip);
   }
-  model.add(makeBox(0.15, 0.15, 1.0, 0x94a3b8, -0.6, 0.45, 2.0));
-  model.add(makeBox(0.15, 0.15, 1.0, 0x94a3b8, 0.6, 0.45, 2.0));
-  buildBrushBar(model, width, 2.6, 0x22d3ee);
+
+  // Valın iki başındakı lövhələr
+  for (const side of [-1, 1]) {
+    const cap = makePart(new THREE.CylinderGeometry(radius * 0.98, radius * 0.98, 0.06, 16), 0x6b7280, side * (width / 2 + 0.02), 0, 0);
+    cap.rotation.z = Math.PI / 2;
+    drum.add(cap);
+  }
+
+  model.add(drum);
+  model.userData.drums.push(drum);
+
+  // Valın üstündəki örtük
+  model.add(makeBlock(width + 0.1, 0.08, radius * 1.6, 0x374151, 0, radius * 2 + 0.12, z - radius * 0.2));
+}
+
+// Yanıb-sönən xəbərdarlıq lampası əlavə edir
+function addBeacon(model, color, x, y, z) {
+  model.add(makeBlock(0.12, 0.08, 0.12, 0x1f2937, x, y - 0.08, z));
+  const lamp = makePart(new THREE.SphereGeometry(0.1, 10, 8), color, x, y, z, color);
+  model.add(lamp);
+  model.userData.beacons.push(lamp);
+}
+
+// İki fara əlavə edir
+function addHeadlights(model, spreadX, y, z) {
+  for (const side of [-1, 1]) {
+    model.add(makeBlock(0.2, 0.1, 0.06, 0xfef9c3, side * spreadX, y, z, 0xfef08a));
+  }
+}
+
+// 1. Skuter: narıncı kiçik maşın, arxada zibil qutusu, sükan, bir fırça val
+function buildVehicleScooter(tool) {
+  const model = newVehicleModel();
+
+  model.add(makeBlock(1.0, 0.2, 1.7, 0x374151, 0, 0.32, 0));
+  model.add(makeBlock(0.9, 0.35, 1.2, 0xf59e0b, 0, 0.58, 0.25));
+  model.add(makeBlock(0.8, 0.25, 0.4, 0xfbbf24, 0, 0.5, 0.95));
+  model.add(makeBlock(0.8, 0.4, 0.6, 0x9ca3af, 0, 0.62, -0.6));
+  model.add(makeBlock(0.84, 0.06, 0.64, 0x6b7280, 0, 0.85, -0.6));
+
+  // Oturacaq və arxalıq
+  model.add(makeBlock(0.55, 0.12, 0.45, 0x111827, 0, 0.82, -0.1));
+  model.add(makeBlock(0.5, 0.4, 0.08, 0x111827, 0, 1.05, -0.33));
+
+  // Sükan dirəyi və sükan
+  const column = makeBlock(0.05, 0.5, 0.05, 0x9ca3af, 0, 1.0, 0.45);
+  column.rotation.x = -0.5;
+  model.add(column);
+  model.add(makeBlock(0.45, 0.05, 0.05, 0x111827, 0, 1.22, 0.35));
+
+  addHeadlights(model, 0.3, 0.52, 1.17);
+  addBeacon(model, 0xf97316, 0.35, 1.25, -0.4);
+
+  addWheel(model, 0.25, 0.18, 0x9ca3af, 0.55, 0.25, 0.6);
+  addWheel(model, 0.25, 0.18, 0x9ca3af, -0.55, 0.25, 0.6);
+  addWheel(model, 0.25, 0.18, 0x9ca3af, 0.55, 0.25, -0.6);
+  addWheel(model, 0.25, 0.18, 0x9ca3af, -0.55, 0.25, -0.6);
+
+  // Fırça valının qolları və val
+  model.add(makeBlock(0.08, 0.08, 0.6, 0x374151, 0.45, 0.3, 1.0));
+  model.add(makeBlock(0.08, 0.08, 0.6, 0x374151, -0.45, 0.3, 1.0));
+  addDrum(model, tool.width, 0.2, tool.brushZ + 0.2, 0xffd34d);
   return model;
 }
 
-// 5. Super kombayn: tünd gövdə, tırtıl zəncirlər, parlayan firuzəyi kabina və iki fırça zolağı
-function buildVehicleCombine(width) {
-  const model = new THREE.Group();
-  model.add(makeBox(0.6, 0.7, 3.6, 0x111827, -1.2, 0.35, 0));
-  model.add(makeBox(0.6, 0.7, 3.6, 0x111827, 1.2, 0.35, 0));
-  model.add(makeBox(2.2, 0.9, 3.2, 0x1f2937, 0, 1.1, 0));
-  model.add(makeBox(1.6, 0.8, 1.2, 0x66ffcc, 0, 1.95, 0.3, 0x0f766e));
-  model.add(makeBox(2.2, 0.1, 0.1, 0x66ffcc, 0, 1.3, 1.62, 0x66ffcc));
-  model.add(makeBox(0.2, 0.5, 0.2, 0xfbbf24, -0.9, 1.8, -1.2, 0xfbbf24));
-  model.add(makeBox(0.2, 0.5, 0.2, 0xfbbf24, 0.9, 1.8, -1.2, 0xfbbf24));
-  model.add(makeBox(0.15, 0.2, 1.4, 0x374151, -1.0, 0.45, 2.2));
-  model.add(makeBox(0.15, 0.2, 1.4, 0x374151, 1.0, 0.45, 2.2));
-  buildBrushBar(model, width, 2.6, 0xffffff);
-  buildBrushBar(model, width, 3.0, 0x66ffcc);
+// 2. Süpürgə yük maşını: mavi kabina, şüşələr, boz yük qutusu, işıqlar, mavi-sarı rənglər
+function buildVehicleTruck(tool) {
+  const model = newVehicleModel();
+
+  model.add(makeBlock(1.5, 0.25, 3.0, 0x1f2937, 0, 0.5, 0.1));
+
+  // Kabina və kapot
+  model.add(makeBlock(1.4, 0.7, 1.0, 0x2563eb, 0, 1.05, 0.75));
+  model.add(makeBlock(1.4, 0.4, 0.7, 0x1d4ed8, 0, 0.85, 1.5));
+  model.add(makeBlock(1.0, 0.04, 0.6, 0xfacc15, 0, 1.07, 1.5));
+  model.add(makeBlock(1.45, 0.08, 1.05, 0x1e3a8a, 0, 1.43, 0.75));
+  model.add(makeGlass(1.2, 0.45, 0.05, 0, 1.1, 1.27, -0.25));
+  model.add(makeGlass(0.05, 0.35, 0.7, 0.71, 1.12, 0.75, 0));
+  model.add(makeGlass(0.05, 0.35, 0.7, -0.71, 1.12, 0.75, 0));
+
+  // Radiator barmaqlığı, faralar, güzgülər
+  model.add(makeBlock(1.0, 0.2, 0.05, 0x111827, 0, 0.8, 1.87));
+  addHeadlights(model, 0.5, 0.92, 1.88);
+  model.add(makeBlock(0.08, 0.2, 0.1, 0x111827, 0.82, 1.2, 1.25));
+  model.add(makeBlock(0.08, 0.2, 0.1, 0x111827, -0.82, 1.2, 1.25));
+
+  // Arxadakı yük qutusu
+  model.add(makeBlock(1.4, 0.8, 1.5, 0x94a3b8, 0, 1.0, -0.7));
+  model.add(makeBlock(1.5, 0.1, 1.6, 0x64748b, 0, 1.45, -0.7));
+  model.add(makeBlock(1.42, 0.12, 1.5, 0xf97316, 0, 0.8, -0.7));
+
+  addBeacon(model, 0xfacc15, 0, 1.55, 0.5);
+
+  addWheel(model, 0.4, 0.3, 0xe5e7eb, 0.85, 0.4, 1.2);
+  addWheel(model, 0.4, 0.3, 0xe5e7eb, -0.85, 0.4, 1.2);
+  addWheel(model, 0.4, 0.3, 0xe5e7eb, 0.85, 0.4, -0.9);
+  addWheel(model, 0.4, 0.3, 0xe5e7eb, -0.85, 0.4, -0.9);
+
+  model.add(makeBlock(0.1, 0.1, 0.9, 0x374151, 0.6, 0.45, 1.75));
+  model.add(makeBlock(0.1, 0.1, 0.9, 0x374151, -0.6, 0.45, 1.75));
+  addDrum(model, tool.width, 0.3, tool.brushZ + 0.3, 0xfacc15);
+  return model;
+}
+
+// 3. Süpürgə traktoru: yaşıl gövdə, iri arxa təkərlər, şüşəli kabina, tüstü borusu, ön qollar
+function buildVehicleTractor(tool) {
+  const model = newVehicleModel();
+
+  // Kapot, mühərrik və stikerlər
+  model.add(makeBlock(1.3, 0.75, 1.6, 0x16a34a, 0, 1.0, 1.1));
+  model.add(makeBlock(1.0, 0.04, 1.4, 0xfacc15, 0, 1.39, 1.1));
+  model.add(makeBlock(1.0, 0.5, 0.06, 0x111827, 0, 1.0, 1.91));
+  model.add(makeBlock(1.2, 0.6, 1.2, 0x15803d, 0, 0.9, -0.2));
+  addHeadlights(model, 0.45, 1.25, 1.93);
+
+  // Kabina: dirəklər, şüşə, dam, oturacaq
+  const pillarX = [0.6, -0.6];
+  const pillarZ = [0.25, -0.95];
+  for (const px of pillarX) {
+    for (const pz of pillarZ) {
+      model.add(makeBlock(0.08, 1.0, 0.08, 0x14532d, px, 1.9, pz));
+    }
+  }
+  model.add(makeGlass(1.2, 0.8, 1.2, 0, 1.95, -0.35, 0));
+  model.add(makeBlock(1.4, 0.1, 1.4, 0x14532d, 0, 2.45, -0.35));
+  model.add(makeBlock(0.5, 0.4, 0.5, 0x111827, 0, 1.5, -0.5));
+
+  // Tüstü borusu
+  const pipe = makePart(new THREE.CylinderGeometry(0.06, 0.06, 0.9, 8), 0x1f2937, 0.45, 1.85, 1.4);
+  model.add(pipe);
+  model.add(makePart(new THREE.CylinderGeometry(0.09, 0.06, 0.08, 8), 0x111827, 0.45, 2.33, 1.4));
+
+  // Palçıqqoruyanlar və təkərlər
+  model.add(makeBlock(0.5, 0.1, 1.4, 0x15803d, 1.0, 1.65, -0.7));
+  model.add(makeBlock(0.5, 0.1, 1.4, 0x15803d, -1.0, 1.65, -0.7));
+  addWheel(model, 0.8, 0.45, 0xfacc15, 1.0, 0.8, -0.7);
+  addWheel(model, 0.8, 0.45, 0xfacc15, -1.0, 0.8, -0.7);
+  addWheel(model, 0.5, 0.3, 0xfacc15, 0.85, 0.5, 1.4);
+  addWheel(model, 0.5, 0.3, 0xfacc15, -0.85, 0.5, 1.4);
+
+  addBeacon(model, 0xf97316, 0, 2.58, -0.35);
+
+  // Fırça valını tutan ön qollar
+  model.add(makeBlock(0.14, 0.14, 1.6, 0x6b7280, 0.65, 0.7, 1.7));
+  model.add(makeBlock(0.14, 0.14, 1.6, 0x6b7280, -0.65, 0.7, 1.7));
+  addDrum(model, tool.width, 0.35, tool.brushZ + 0.25, 0xdc2626);
+  return model;
+}
+
+// 4. Ay vezdehodu: ağ gövdə, 6 təkər, şüşə günbəz, günəş panelləri, antena boşqabı
+function buildVehicleRover(tool) {
+  const model = newVehicleModel();
+
+  // Gövdə
+  model.add(makeBlock(1.8, 0.5, 3.2, 0xe5e7eb, 0, 0.95, 0));
+  model.add(makeBlock(1.5, 0.2, 3.0, 0x64748b, 0, 0.65, 0));
+  model.add(makeBlock(1.6, 0.08, 2.4, 0xcbd5e1, 0, 1.24, -0.1));
+  model.add(makeBlock(1.84, 0.12, 1.6, 0xf97316, 0, 0.95, 0));
+
+  // Şüşə günbəz kabina
+  model.add(makeDome(0.65, 0.5, 0.8, 0x22d3ee, 0x0e7490, 0, 1.28, 0.9));
+
+  // Günəş panelləri (şəbəkə xətləri ilə)
+  for (const side of [-1, 1]) {
+    const panel = new THREE.Group();
+    panel.position.set(side * 0.65, 1.5, -0.9);
+    panel.rotation.z = side * -0.3;
+    panel.add(makeBlock(1.0, 0.04, 1.3, 0x1e3a8a, 0, 0, 0, 0x1e40af));
+    panel.add(makeBlock(1.04, 0.05, 0.03, 0x93c5fd, 0, 0.01, -0.3));
+    panel.add(makeBlock(1.04, 0.05, 0.03, 0x93c5fd, 0, 0.01, 0.1));
+    panel.add(makeBlock(0.03, 0.05, 1.3, 0x93c5fd, 0, 0.01, 0));
+    model.add(panel);
+  }
+
+  // Antena boşqabı
+  model.add(makePart(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 6), 0x94a3b8, -0.5, 1.5, 0.1));
+  const dish = makePart(new THREE.ConeGeometry(0.35, 0.22, 14), 0xf1f5f9, -0.5, 1.78, 0.1);
+  dish.rotation.x = -0.9;
+  model.add(dish);
+
+  // Projektorlar
+  for (const side of [-1, 1]) {
+    model.add(makeBlock(0.22, 0.12, 0.15, 0xfef9c3, side * 0.6, 1.05, 1.65, 0xfef08a));
+  }
+  addBeacon(model, 0x22d3ee, 0.5, 1.42, 0.1);
+
+  // 6 təkər və asqı qolları
+  const zList = [-1.1, 0, 1.1];
+  for (const wheelZ of zList) {
+    addWheel(model, 0.5, 0.4, 0x94a3b8, 1.15, 0.5, wheelZ);
+    addWheel(model, 0.5, 0.4, 0x94a3b8, -1.15, 0.5, wheelZ);
+    model.add(makeBlock(0.5, 0.1, 0.15, 0x475569, 0.95, 0.75, wheelZ));
+    model.add(makeBlock(0.5, 0.1, 0.15, 0x475569, -0.95, 0.75, wheelZ));
+  }
+
+  model.add(makeBlock(0.12, 0.12, 1.25, 0x64748b, 0.8, 0.55, 2.2));
+  model.add(makeBlock(0.12, 0.12, 1.25, 0x64748b, -0.8, 0.55, 2.2));
+  addDrum(model, tool.width, 0.4, tool.brushZ + 0.25, 0x22d3ee);
+  return model;
+}
+
+// 5. Super kombayn: tırtıllı tünd gövdə, parlayan firuzəyi zolaqlar, günbəz kabina, mühərrik alovu, iki fırça val
+function buildVehicleCombine(tool) {
+  const model = newVehicleModel();
+
+  // Tırtıllar və tırtıl təkərləri
+  for (const side of [-1, 1]) {
+    model.add(makeBlock(0.7, 0.55, 3.8, 0x111827, side * 1.25, 0.4, 0));
+    model.add(makeBlock(0.8, 0.1, 3.6, 0x1f2937, side * 1.25, 0.72, 0));
+    const trackZ = [-1.5, 0, 1.5];
+    for (const wheelZ of trackZ) {
+      addWheel(model, 0.35, 0.5, 0x6b7280, side * 1.25, 0.35, wheelZ);
+    }
+  }
+
+  // Gövdə
+  model.add(makeBlock(2.4, 0.8, 3.4, 0x1f2937, 0, 1.05, 0));
+  model.add(makeBlock(1.9, 0.4, 2.4, 0x111827, 0, 1.65, -0.2));
+  const wedge = makeBlock(2.0, 0.5, 0.8, 0x374151, 0, 0.95, 1.9);
+  wedge.rotation.x = 0.3;
+  model.add(wedge);
+
+  // Kabina
+  model.add(makeDome(1.0, 0.75, 1.25, 0x22d3ee, 0x0891b2, 0, 1.85, 0.5));
+  model.add(makeBlock(1.6, 0.1, 0.15, 0xffffff, 0, 2.0, 1.55, 0xffffff));
+
+  // Parlayan zolaqlar
+  model.add(makeBlock(2.42, 0.08, 0.08, 0x66ffcc, 0, 1.2, 1.2, 0x66ffcc));
+  model.add(makeBlock(0.06, 0.08, 3.0, 0x66ffcc, 1.22, 1.05, 0, 0x66ffcc));
+  model.add(makeBlock(0.06, 0.08, 3.0, 0x66ffcc, -1.22, 1.05, 0, 0x66ffcc));
+
+  // Arxada iki reaktiv mühərrik
+  for (const side of [-1, 1]) {
+    const engine = makePart(new THREE.CylinderGeometry(0.35, 0.4, 1.0, 12), 0x374151, side * 0.6, 1.2, -1.9);
+    engine.rotation.x = Math.PI / 2;
+    model.add(engine);
+    const flame = makePart(new THREE.CylinderGeometry(0.28, 0.28, 0.06, 12), 0xfb923c, side * 0.6, 1.2, -2.42, 0xfb923c);
+    flame.rotation.x = Math.PI / 2;
+    model.add(flame);
+  }
+
+  // Antenalar və lampa
+  model.add(makePart(new THREE.CylinderGeometry(0.03, 0.03, 1.2, 6), 0x94a3b8, 0.9, 2.2, -1.0));
+  model.add(makePart(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 6), 0x94a3b8, -0.9, 2.1, -1.0));
+  addBeacon(model, 0xf97316, 0, 2.15, -1.0);
+
+  // Ön qollar və iki fırça val
+  model.add(makeBlock(0.2, 0.2, 1.5, 0x374151, 1.1, 0.6, 2.55));
+  model.add(makeBlock(0.2, 0.2, 1.5, 0x374151, -1.1, 0.6, 2.55));
+  model.add(makeBlock(0.3, 0.3, 1.0, 0x374151, 0, 0.6, 2.7));
+  addDrum(model, tool.width * 0.8, 0.25, tool.brushZ - 0.35, 0x66ffcc);
+  addDrum(model, tool.width, 0.45, tool.brushZ + 0.25, 0xffffff);
   return model;
 }
 
@@ -1932,7 +2186,7 @@ function syncVehicleModel(vehicle) {
   if (level < 1) { return; }
 
   const tool = CONFIG.VEHICLE_LEVELS[level - 1];
-  vehicle.model = VEHICLE_BUILDERS[level - 1](tool.width);
+  vehicle.model = VEHICLE_BUILDERS[level - 1](tool);
   vehicle.group.add(vehicle.model);
 }
 
@@ -2010,8 +2264,22 @@ function sweepVehicleStrip(dustSystem, tool, centerX, centerZ, heading) {
   return cleanedCells;
 }
 
+// Maşının hərəkətli hissələrini fırladır: təkərlər, fırça vallar, yanıb-sönən lampalar
+function animateVehicleParts(data, forwardMove, dt, time) {
+  for (const wheel of data.wheels) {
+    wheel.group.rotation.x += forwardMove / wheel.radius;
+  }
+  for (const drum of data.drums) {
+    drum.rotation.x += dt * 14;
+  }
+  const blink = 0.3 + 0.7 * Math.abs(Math.sin(time * 6));
+  for (const beacon of data.beacons) {
+    beacon.material.emissiveIntensity = blink;
+  }
+}
+
 // Hər kadrda: maşının şəklini yeniləyir və yolundakı tozu təmizləyir
-function updateVehicle(vehicle, dustSystem, playerPos, heading) {
+function updateVehicle(vehicle, dustSystem, playerPos, heading, dt, time) {
   syncVehicleModel(vehicle);
 
   // Telefondakı düymə yalnız maşın alınıbsa görünür
@@ -2036,7 +2304,15 @@ function updateVehicle(vehicle, dustSystem, playerPos, heading) {
     vehicle.lastZ = playerPos.z;
   }
 
-  const moved = Math.hypot(playerPos.x - vehicle.lastX, playerPos.z - vehicle.lastZ);
+  const deltaX = playerPos.x - vehicle.lastX;
+  const deltaZ = playerPos.z - vehicle.lastZ;
+  const moved = Math.hypot(deltaX, deltaZ);
+  const forwardMove = deltaX * heading.x + deltaZ * heading.z;
+
+  if (vehicle.model !== null) {
+    animateVehicleParts(vehicle.model.userData, forwardMove, dt, time);
+  }
+
   if (moved < 0.0001 && !justStarted) { return; }
 
   // Əvvəlki yerdən indiki yerə qədər addım-addım təmizləyirik ki, boşluq qalmasın
@@ -2044,8 +2320,8 @@ function updateVehicle(vehicle, dustSystem, playerPos, heading) {
   let cleanedCells = 0;
   for (let step = 1; step <= steps; step++) {
     const t = step / steps;
-    const stepX = vehicle.lastX + (playerPos.x - vehicle.lastX) * t;
-    const stepZ = vehicle.lastZ + (playerPos.z - vehicle.lastZ) * t;
+    const stepX = vehicle.lastX + deltaX * t;
+    const stepZ = vehicle.lastZ + deltaZ * t;
     cleanedCells += sweepVehicleStrip(dustSystem, tool, stepX, stepZ, heading);
   }
 
@@ -2264,7 +2540,7 @@ function setupTouchControls() {
 // ===== İDARƏETMƏ: KOMPÜTER (keyboard.js) =====
 // ===================================================================
 
-// Kompüterdə 1, 2, 3, 4, 5 düymələri yeniləmə panelindəki uyğun "Al" düyməsini basır
+// Kompüterdə 1, 2, 3, 4 düymələri yeniləmə panelindəki uyğun "Al" düyməsini basır
 const BUY_BUTTONS = {
   Digit1: 'shop-buy-tool',
   Numpad1: 'shop-buy-tool',
@@ -2278,7 +2554,7 @@ const BUY_BUTTONS = {
   Numpad5: 'shop-buy-vehicle',
 };
 
-// Kompüter idarəsi: WASD/oxlar, siçan baxışı, sol klik və ya Boşluq, E (maşın), 1/2/3/4/5 (yeniləmə paneli)
+// Kompüter idarəsi: WASD/oxlar, siçan baxışı, sol klik və ya Boşluq, 1/2/3/4 (yeniləmə paneli)
 function setupKeyboardControls(inputState) {
   const container = document.getElementById('game-container');
   const hint = document.getElementById('pc-hint');
@@ -2444,7 +2720,7 @@ document.getElementById('version-tag').textContent = CONFIG.VERSION;
 // Oyunu seçilmiş cihaza ('phone' və ya 'pc') görə işə salır
 function startGame(device) {
   loadGame();
-  GameState.money = 100000;
+  GameState.money = 100000; // TEST: başlanğıc pul (testdən sonra bu sətri sil)
   applyUpgrades();
 
   const container = document.getElementById('game-container');
@@ -2617,12 +2893,12 @@ function startGame(device) {
       hit = findGroundHit();
     }
     updateDustSystem(dustSystem, hit, inputState.actionPressed && !vehicle.driving);
-    updateVehicle(vehicle, dustSystem, playerPos, heading);
+    updateVehicle(vehicle, dustSystem, playerPos, heading, dt, clock.elapsedTime);
     updateRobots(robots, dustSystem, playerPos, dt);
     updateBase(base, playerPos);
     updateMinimap(minimap, dustSystem, playerPos, heading, nowMs);
 
-    // Parça tamamlananda mesaj (oyunçu, maşın və robot tamamlaya bilər)
+    // Parça tamamlananda mesaj (oyunçu da, robot da tamamlaya bilər)
     if (dustSystem.rewardPending > 0) {
       showToast('Parça təmizləndi! +' + dustSystem.rewardPending + ' 💰');
       dustSystem.rewardPending = 0;
